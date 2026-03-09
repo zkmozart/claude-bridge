@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Bridge</title>
+<style>
+  :root { --bg: #1a1a1a; --surface: #242424; --border: #333; --text: #e0e0e0; --muted: #888; --accent: #D97706; --green: #22c55e; --red: #ef4444; --yellow: #eab308; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.disconnected { background: var(--red); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 20px; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 10px; }
+  .kpi-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .kpi { text-align: center; }
+  .kpi .value { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .kpi .label { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .agents-list { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+  .agent-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg); border-radius: 6px; border-left: 3px solid var(--accent); }
+  .agent-item .name { font-weight: 600; color: var(--accent); min-width: 100px; }
+  .agent-item .meta { color: var(--muted); font-size: 11px; flex: 1; }
+  .cancel-btn { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid var(--red); border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-family: inherit; text-transform: uppercase; font-weight: 600; }
+  .cancel-btn:hover { background: var(--red); color: white; }
+  .agent-item.completed { border-left-color: var(--green); }
+  .agent-item.completed .name { color: var(--green); }
+  .agent-item.failed { border-left-color: var(--red); }
+  .agent-item.failed .name { color: var(--red); }
+  .empty { color: var(--muted); font-style: italic; padding: 8px 0; }
+  .plan-item { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .plan-item:last-child { border-bottom: none; }
+  .plan-item .id { font-weight: 600; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; font-weight: 600; }
+  .badge.pending { background: rgba(234,179,8,0.15); color: var(--yellow); }
+  .badge.completed { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge.failed { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge.partial { background: rgba(217,119,6,0.15); color: var(--accent); }
+  .badge.in-progress { background: rgba(217,119,6,0.15); color: var(--accent); }
+  .log-container { grid-column: 1 / -1; max-height: 400px; overflow-y: auto; }
+  .log-container .logs { font-size: 12px; }
+  .log-entry { padding: 2px 0; white-space: pre-wrap; word-break: break-all; }
+  .log-entry .ts { color: var(--muted); margin-right: 6px; }
+  .log-entry .tag { font-weight: 600; margin-right: 4px; }
+  .log-entry.error .tag { color: var(--red); }
+  .log-entry.warn .tag { color: var(--yellow); }
+  .log-entry.info .tag { color: var(--accent); }
+  .reconnect-bar { background: var(--red); color: white; text-align: center; padding: 4px; font-size: 11px; display: none; }
+</style>
+</head>
+<body>
+<div class="reconnect-bar" id="reconnectBar">Disconnected — reconnecting...</div>
+<div class="header">
+  <h1>Claude Bridge</h1>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="uptime" style="color:var(--muted);font-size:11px;"></span>
+    <span><span class="status-dot disconnected" id="statusDot"></span><span id="statusText">Connecting</span></span>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Status</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="value" id="kpiProcessed">-</div><div class="label">Processed</div></div>
+      <div class="kpi"><div class="value" id="kpiActive">-</div><div class="label">Active</div></div>
+      <div class="kpi"><div class="value" id="kpiPending">-</div><div class="label">Pending</div></div>
+      <div class="kpi"><div class="value" id="kpiAuth">-</div><div class="label">Auth</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Active Agents</h2>
+    <div class="agents-list" id="agentsList">
+      <div class="empty">No active agents</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Recent Plans</h2>
+    <div id="plansList"><div class="empty">No plans yet</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Connection</h2>
+    <div style="font-size:12px;">
+      <div>Daemon: <span id="connDaemon" style="color:var(--muted)">checking...</span></div>
+      <div>SSE: <span id="connSSE" style="color:var(--muted)">connecting...</span></div>
+      <div style="margin-top:8px;color:var(--muted);font-size:11px;" id="connHost"></div>
+    </div>
+  </div>
+
+  <div class="card log-container">
+    <h2>Live Log</h2>
+    <div class="logs" id="logStream"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const activeAgents = new Map();
+const plans = [];
+let sse = null;
+let reconnectTimer = null;
+
+function formatUptime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function addLog(entry) {
+  const el = document.createElement('div');
+  el.className = `log-entry ${entry.level}`;
+  el.innerHTML = `<span class="ts">${formatTime(entry.timestamp)}</span><span class="tag">[${entry.tag}]</span>${escHtml(entry.message)}`;
+  const container = $('logStream');
+  container.appendChild(el);
+  while (container.children.length > 200) container.removeChild(container.firstChild);
+  const parent = container.parentElement;
+  if (parent.scrollHeight - parent.scrollTop - parent.clientHeight < 100) {
+    parent.scrollTop = parent.scrollHeight;
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderAgents() {
+  const el = $('agentsList');
+  if (activeAgents.size === 0) {
+    el.innerHTML = '<div class="empty">No active agents</div>';
+    return;
+  }
+  el.innerHTML = '';
+  for (const [key, a] of activeAgents) {
+    const cls = a.status === 'completed' ? 'completed' : a.status === 'failed' ? 'failed' : '';
+    const isRunning = !a.status || a.status === 'running';
+    const div = document.createElement('div');
+    div.className = `agent-item ${cls}`;
+    const uptimeStr = a.uptimeSeconds ? ` | ${formatUptime(a.uptimeSeconds)}` : '';
+    div.innerHTML = `<span class="name">${escHtml(a.agent)}</span><span class="meta">${escHtml(a.planId)} | turns: ${a.turns || 0}${uptimeStr} | ${a.status || 'running'}</span>${isRunning ? `<button class="cancel-btn" onclick="cancelAgent('${escHtml(key)}')">Kill</button>` : ''}`;
+    el.appendChild(div);
+  }
+}
+
+function renderPlans() {
+  const el = $('plansList');
+  if (plans.length === 0) {
+    el.innerHTML = '<div class="empty">No plans yet</div>';
+    return;
+  }
+  el.innerHTML = '';
+  for (const p of plans.slice(-10).reverse()) {
+    const div = document.createElement('div');
+    div.className = 'plan-item';
+    div.innerHTML = `<span class="id">${escHtml(p.planId || p.id || '?')}</span><span class="badge ${p.status || 'pending'}">${p.status || 'pending'}</span>`;
+    el.appendChild(div);
+  }
+}
+
+function connect() {
+  if (sse) { try { sse.close(); } catch {} }
+
+  sse = new EventSource('/api/events');
+
+  sse.onopen = () => {
+    $('statusDot').className = 'status-dot connected';
+    $('statusText').textContent = 'Connected';
+    $('connSSE').textContent = 'connected';
+    $('connSSE').style.color = 'var(--green)';
+    $('reconnectBar').style.display = 'none';
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  sse.onerror = () => {
+    $('statusDot').className = 'status-dot disconnected';
+    $('statusText').textContent = 'Disconnected';
+    $('connSSE').textContent = 'disconnected';
+    $('connSSE').style.color = 'var(--red)';
+    $('reconnectBar').style.display = 'block';
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 10000);
+    }
+  };
+
+  sse.addEventListener('log', (e) => {
+    try { addLog(JSON.parse(e.data)); } catch {}
+  });
+
+  sse.addEventListener('plan', (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      const existing = plans.find(p => (p.planId || p.id) === d.planId);
+      if (existing) { Object.assign(existing, d); }
+      else { plans.push(d); }
+      renderPlans();
+    } catch {}
+  });
+
+  sse.addEventListener('agent', (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      const key = `${d.planId}/${d.agent}`;
+      if (d.action === 'completed' || d.action === 'failed') {
+        const a = activeAgents.get(key) || d;
+        a.status = d.action;
+        activeAgents.set(key, a);
+        setTimeout(() => { activeAgents.delete(key); renderAgents(); }, 30000);
+      } else {
+        activeAgents.set(key, d);
+      }
+      renderAgents();
+      $('kpiActive').textContent = [...activeAgents.values()].filter(a => !a.status || a.status === 'running').length;
+    } catch {}
+  });
+
+  sse.addEventListener('status', (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      $('kpiProcessed').textContent = d.processedPlans ?? '-';
+      $('kpiActive').textContent = d.activeAgents ?? '-';
+      $('kpiPending').textContent = d.pendingPlans ?? '-';
+      $('kpiAuth').textContent = d.authOk ? 'OK' : 'FAIL';
+      $('kpiAuth').style.color = d.authOk ? 'var(--green)' : 'var(--red)';
+      if (d.uptime) $('uptime').textContent = 'up ' + formatUptime(d.uptime);
+    } catch {}
+  });
+
+  sse.addEventListener('init', (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.recentLogs) d.recentLogs.forEach(addLog);
+      if (d.plans) { plans.length = 0; plans.push(...d.plans); renderPlans(); }
+      if (d.activeAgents) {
+        for (const a of d.activeAgents) {
+          const key = `${a.planId}/${a.agent}`;
+          activeAgents.set(key, { ...a, status: 'running' });
+        }
+        renderAgents();
+        $('kpiActive').textContent = activeAgents.size;
+      }
+    } catch {}
+  });
+}
+
+async function cancelAgent(key) {
+  if (!confirm(`Kill agent ${key}?`)) return;
+  try {
+    const r = await fetch('/api/agents/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    const d = await r.json();
+    if (d.status === 'cancelled') {
+      addLog({ level: 'warn', tag: 'Dashboard', message: `Cancelled ${key}`, timestamp: new Date().toISOString() });
+    } else {
+      addLog({ level: 'error', tag: 'Dashboard', message: `Cancel failed: ${d.error}`, timestamp: new Date().toISOString() });
+    }
+  } catch (e) {
+    addLog({ level: 'error', tag: 'Dashboard', message: `Cancel error: ${e.message}`, timestamp: new Date().toISOString() });
+  }
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    $('connDaemon').textContent = d.status;
+    $('connDaemon').style.color = d.status === 'running' ? 'var(--green)' : 'var(--red)';
+    $('connHost').textContent = location.host;
+    $('uptime').textContent = 'up ' + formatUptime(d.uptime);
+    $('kpiProcessed').textContent = d.processedPlans;
+    $('kpiActive').textContent = d.activeAgents;
+  } catch {
+    $('connDaemon').textContent = 'unreachable';
+    $('connDaemon').style.color = 'var(--red)';
+  }
+}
+
+checkHealth();
+setInterval(checkHealth, 30000);
+connect();
+</script>
+</body>
+</html>

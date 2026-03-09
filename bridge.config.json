@@ -1,0 +1,35 @@
+{
+  "repoPath": ".",
+  "pollIntervalMs": 30000,
+  "maxConcurrentAgents": 5,
+  "defaultMaxTurns": 50,
+  "defaultMaxBudgetUsd": 5.00,
+  "planBranch": "bridge/plans",
+  "plansDir": "plans",
+  "worktreeScript": "scripts/agent-worktree.sh",
+  "stateFile": "state.json",
+  "resultsDir": "results",
+  "logLevel": "info",
+  "agents": {
+    "backend-dev": {
+      "description": "Backend API, database, server-side logic",
+      "scope": ["backend/**", "services/**"]
+    },
+    "frontend-dev": {
+      "description": "Frontend UI, HTML/CSS/JS",
+      "scope": ["frontend/**", "src/**"]
+    },
+    "ai-engineer": {
+      "description": "AI/ML services, model integration, data pipelines",
+      "scope": ["ai/**", "services/**"]
+    },
+    "debug": {
+      "description": "Bug diagnosis and surgical fixes across any directory",
+      "scope": ["**"]
+    },
+    "qa-tester": {
+      "description": "End-to-end tests, test coverage",
+      "scope": ["tests/**"]
+    }
+  }
+}

@@ -1,0 +1,29 @@
+node_modules/
+.env
+state.json
+
+# Plan lifecycle directories (keep structure, ignore contents)
+plans/in-progress/*
+plans/done/*
+plans/failed/*
+!plans/pending/.gitkeep
+!plans/in-progress/.gitkeep
+!plans/done/.gitkeep
+!plans/failed/.gitkeep
+
+# Results
+results/*
+!results/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Agent worktrees (created outside repo by default)
+.agent-worktrees/

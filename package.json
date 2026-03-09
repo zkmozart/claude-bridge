@@ -1,0 +1,31 @@
+{
+  "name": "claude-bridge",
+  "version": "1.0.0",
+  "description": "Multi-agent orchestration daemon for Claude Code — DAG-based plan execution with git worktree isolation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "multi-agent",
+    "orchestration",
+    "daemon"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "gray-matter": "^4.0.3",
+    "ajv": "^8.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
